@@ -1,3 +1,6 @@
+# Installing
+* install redis and start it on localhost:6379 
+
 # Running
 `sbt run`
 
