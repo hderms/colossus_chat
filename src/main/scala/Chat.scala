@@ -16,14 +16,13 @@ import colossus.protocols.redis.Redis.defaults._
 import colossus.protocols.redis._
 import java.net.InetSocketAddress
 import scala.concurrent.duration._
-import scala.collection.concurrent.TrieMap
 
 import colossus.protocols.redis.{ RedisClient, RedisCommandParser }
 
-object WebsocketExample {
+object Chat {
   import Commands._
-  def newHandler(ctx: ServerContext, redis: RedisClient[Callback], nicks: Nicknames.Directory): WebsocketServerHandler[RawString] = {
-    new WebsocketServerHandler[RawString](ctx) with ProxyActor {
+  def newHandler(ctx: ServerContext, redis: RedisClient[Callback], nickNames: Directory): User.ClientRef = {
+    new User.ClientRef(ctx) with ProxyActor {
       val me = { this }
 
       override def preStart(): Unit = {
@@ -36,8 +35,8 @@ object WebsocketExample {
       }
 
       def handle = {
-        case Nick(nick) => Nicknames.register(nicks, nick, me)
-        case Send(nick, message) => Nicknames.fetch(nicks, nick) match {
+        case Nick(nick) => Nicknames.register(nickNames, nick, me)
+        case Send(nick, message) => Nicknames.fetch(nickNames, nick) match {
           case None => sendMessage("Couldn't find user by that nickname.")
           case Some(handle) => handle.sendMessage(message)
         }
@@ -54,9 +53,8 @@ object WebsocketExample {
     }
   }
 
-  def start(port: Int, redisAddress: InetSocketAddress)(implicit io: IOSystem): Unit = {
+  def start(port: Int, redisAddress: InetSocketAddress, nameDirectory: Directory)(implicit io: IOSystem): Unit = {
 
-    val nicks = new Nicknames.Directory(new TrieMap[Nicknames.Nick, WebsocketServerHandler[RawString]])
     WebsocketServer.start("websocket", port) { worker =>
       new WebsocketInitializer(worker) {
         implicit val env = worker
@@ -64,13 +62,10 @@ object WebsocketExample {
         val redis = Redis.client(redisAddress.getHostName, redisAddress.getPort, 1.second)
 
         def onConnect = ctx => {
-          val handler = newHandler(ctx, redis, nicks)
+          val handler = newHandler(ctx, redis, nameDirectory)
           handler
-
         }
-
       }
-
     }
   }
 }
